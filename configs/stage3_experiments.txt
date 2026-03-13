@@ -1,0 +1,3 @@
+configs/recurrent_local_128_gru_bptt1024_gru512.yaml
+configs/recurrent_local_128_gru_bptt1024_gru1024.yaml
+configs/recurrent_local_128_gru_bptt1024_gru2048.yaml

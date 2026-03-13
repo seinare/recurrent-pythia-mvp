@@ -1,0 +1,24 @@
+description: Recurrent local-128 GRU without chunk detachment, train length 2048.
+data_path: data/enwik8
+seq_len: 2048
+batch_size: 1
+epochs: 1
+max_steps: 0
+eval_every: 200
+eval_batches: 8
+device: cuda
+hidden_size: 512
+num_layers: 6
+num_heads: 8
+ffn_size: 2048
+max_position_embeddings: 128
+window_size: 128
+gru_hidden: 256
+use_recurrence: true
+truncate_bptt: false
+wandb_name: recurrent_local_128_gru_bptt2048
+wandb_tags:
+  - recurrent
+  - local128
+  - bptt2048
+  - enwik8

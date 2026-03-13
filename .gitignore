@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+
+data/enwik8
+data/enwik8.zip
+
+logs/
+checkpoints/
+wandb/
+
+.DS_Store
+Thumbs.db

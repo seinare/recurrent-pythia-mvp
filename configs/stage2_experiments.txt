@@ -1,0 +1,5 @@
+configs/baseline_full.yaml
+configs/baseline_local_128.yaml
+configs/recurrent_local_128_gru_bptt1024.yaml
+configs/recurrent_local_128_gru_bptt2048.yaml
+configs/recurrent_local_128_gru_bptt4096.yaml

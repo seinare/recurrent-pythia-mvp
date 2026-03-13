@@ -1,0 +1,5 @@
+configs/baseline_full.yaml
+configs/baseline_local_128.yaml
+configs/recurrent_local_128_gru.yaml
+configs/recurrent_local_256_gru.yaml
+configs/recurrent_local_1024_gru.yaml

@@ -1,0 +1,22 @@
+description: Recurrent experiment with local attention window 1024.
+data_path: data/enwik8
+seq_len: 1024
+batch_size: 2
+epochs: 1
+max_steps: 0
+eval_every: 200
+eval_batches: 8
+device: cuda
+hidden_size: 512
+num_layers: 6
+num_heads: 8
+ffn_size: 2048
+max_position_embeddings: 1024
+window_size: 1024
+gru_hidden: 256
+use_recurrence: true
+wandb_name: recurrent_local_1024_gru
+wandb_tags:
+  - recurrent
+  - local1024
+  - enwik8
