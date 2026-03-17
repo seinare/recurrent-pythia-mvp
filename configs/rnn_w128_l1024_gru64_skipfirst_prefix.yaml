@@ -1,0 +1,31 @@
+description: Recurrent local-128 with prefix chunk, first layer GRU disabled, gru_hidden 64.
+data_path: data/enwik8
+seq_len: 1024
+batch_size: 2
+epochs: 1
+max_steps: 0
+eval_every: 200
+eval_batches: 8
+device: cuda
+hidden_size: 512
+num_layers: 6
+num_heads: 8
+ffn_size: 2048
+max_position_embeddings: 128
+window_size: 128
+gru_hidden: 64
+use_recurrence: true
+gru_norm: true
+gru_disable_first_layer: true
+gru_position: pre_attn
+prepend_prefix_chunk: true
+truncate_bptt: false
+wandb_name: rnn_w128_l1024_gru64_skipfirst_prefix
+wandb_tags:
+  - recurrent
+  - local128
+  - len1024
+  - skipfirst
+  - prefix
+  - gru64
+  - enwik8

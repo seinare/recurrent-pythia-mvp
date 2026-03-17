@@ -19,6 +19,9 @@ class RecurrentPythiaConfig:
     window_size: Optional[int] = 128
     gru_hidden: int = 256
     use_recurrence: bool = True
+    gru_norm: bool = True
+    gru_disable_first_layer: bool = False
+    gru_position: str = "pre_attn"
     dropout: float = 0.0
 
     @property
@@ -29,12 +32,13 @@ class RecurrentPythiaConfig:
 
 
 class LayerLocalGRU(nn.Module):
-    def __init__(self, hidden_size: int = 512, gru_hidden: int = 256) -> None:
+    def __init__(self, hidden_size: int = 512, gru_hidden: int = 256, use_norm: bool = True) -> None:
         super().__init__()
         self.gru_hidden = gru_hidden
         self.gate_proj = nn.Linear(hidden_size + gru_hidden, 2 * gru_hidden)
         self.candidate_proj = nn.Linear(hidden_size + gru_hidden, gru_hidden)
         self.out_proj = nn.Linear(gru_hidden, hidden_size)
+        self.norm = RMSNorm(hidden_size) if use_norm else nn.Identity()
         nn.init.normal_(self.out_proj.weight, mean=0.0, std=0.001)
         nn.init.zeros_(self.out_proj.bias)
 
@@ -51,7 +55,18 @@ class LayerLocalGRU(nn.Module):
         z, r = torch.chunk(torch.sigmoid(self.gate_proj(cat_input)), 2, dim=-1)
         candidate = torch.cat([x, r * prev_state], dim=-1)
         new_state = (1.0 - z) * prev_state + z * torch.tanh(self.candidate_proj(candidate))
-        return x + self.out_proj(new_state), new_state
+        return self.norm(x + self.out_proj(new_state)), new_state
+
+
+class RMSNorm(nn.Module):
+    def __init__(self, hidden_size: int, eps: float = 1e-6) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(hidden_size))
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        variance = x.pow(2).mean(dim=-1, keepdim=True)
+        return x * torch.rsqrt(variance + self.eps) * self.weight
 
 
 def rotate_half(x: torch.Tensor) -> torch.Tensor:
@@ -152,9 +167,13 @@ class FeedForward(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, config: RecurrentPythiaConfig) -> None:
+    def __init__(self, config: RecurrentPythiaConfig, layer_idx: int) -> None:
         super().__init__()
-        self.layer_local_gru = LayerLocalGRU(config.hidden_size, config.gru_hidden) if config.use_recurrence else None
+        use_layer_gru = config.use_recurrence and not (config.gru_disable_first_layer and layer_idx == 0)
+        self.gru_position = config.gru_position
+        self.layer_local_gru = (
+            LayerLocalGRU(config.hidden_size, config.gru_hidden, use_norm=config.gru_norm) if use_layer_gru else None
+        )
         self.pre_attn_norm = nn.LayerNorm(config.hidden_size)
         self.attn = CausalSelfAttention(config)
         self.pre_mlp_norm = nn.LayerNorm(config.hidden_size)
@@ -167,10 +186,12 @@ class TransformerBlock(nn.Module):
         attention_mask: Optional[torch.Tensor] = None,
     ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         next_state = None
-        if self.layer_local_gru is not None:
+        if self.layer_local_gru is not None and self.gru_position == "pre_attn":
             hidden_states, next_state = self.layer_local_gru(hidden_states, prev_state)
 
         hidden_states = hidden_states + self.attn(self.pre_attn_norm(hidden_states), attention_mask=attention_mask)
+        if self.layer_local_gru is not None and self.gru_position == "post_attn":
+            hidden_states, next_state = self.layer_local_gru(hidden_states, prev_state)
         hidden_states = hidden_states + self.mlp(self.pre_mlp_norm(hidden_states))
         return hidden_states, next_state
 
@@ -181,7 +202,7 @@ class RecurrentPythiaForCausalLM(nn.Module):
         self.config = config
         self.embed = nn.Embedding(config.vocab_size, config.hidden_size)
         self.dropout = nn.Dropout(config.dropout)
-        self.layers = nn.ModuleList([TransformerBlock(config) for _ in range(config.num_layers)])
+        self.layers = nn.ModuleList([TransformerBlock(config, layer_idx=i) for i in range(config.num_layers)])
         self.final_norm = nn.LayerNorm(config.hidden_size)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         self.apply(self._init_weights)
@@ -195,9 +216,10 @@ class RecurrentPythiaForCausalLM(nn.Module):
                 nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
-        elif isinstance(module, nn.LayerNorm):
+        elif isinstance(module, (nn.LayerNorm, RMSNorm)):
             nn.init.ones_(module.weight)
-            nn.init.zeros_(module.bias)
+            if hasattr(module, "bias") and module.bias is not None:
+                nn.init.zeros_(module.bias)
 
     def forward(
         self,

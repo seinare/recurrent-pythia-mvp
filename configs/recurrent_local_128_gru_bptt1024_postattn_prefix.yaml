@@ -1,0 +1,30 @@
+description: Recurrent local-128 with prefix chunk and GRU after attention.
+data_path: data/enwik8
+seq_len: 1024
+batch_size: 2
+epochs: 1
+max_steps: 0
+eval_every: 200
+eval_batches: 8
+device: cuda
+hidden_size: 512
+num_layers: 6
+num_heads: 8
+ffn_size: 2048
+max_position_embeddings: 128
+window_size: 128
+gru_hidden: 256
+use_recurrence: true
+gru_norm: true
+gru_disable_first_layer: false
+gru_position: post_attn
+prepend_prefix_chunk: true
+truncate_bptt: false
+wandb_name: recurrent_local_128_gru_bptt1024_postattn_prefix
+wandb_tags:
+  - recurrent
+  - local128
+  - bptt1024
+  - postattn
+  - prefix
+  - enwik8

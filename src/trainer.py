@@ -48,6 +48,10 @@ class TrainConfig:
     window_size: int = 128
     gru_hidden: int = 256
     use_recurrence: bool = True
+    gru_norm: bool = True
+    gru_disable_first_layer: bool = False
+    gru_position: str = "pre_attn"
+    prepend_prefix_chunk: bool = False
     truncate_bptt: bool = True
     num_workers: int = 0
     wandb_project: str = "recurrent-pythia-mvp"
@@ -82,6 +86,10 @@ TRAIN_OPTION_TO_FIELD = {
     "--max-position-embeddings": "max_position_embeddings",
     "--window-size": "window_size",
     "--gru-hidden": "gru_hidden",
+    "--gru-norm": "gru_norm",
+    "--gru-disable-first-layer": "gru_disable_first_layer",
+    "--gru-position": "gru_position",
+    "--prepend-prefix-chunk": "prepend_prefix_chunk",
     "--truncate-bptt": "truncate_bptt",
     "--num-workers": "num_workers",
     "--wandb-project": "wandb_project",
@@ -169,6 +177,9 @@ def build_model(train_config: TrainConfig, vocab_size: int) -> RecurrentPythiaFo
         window_size=None if train_config.window_size <= 0 else train_config.window_size,
         gru_hidden=train_config.gru_hidden,
         use_recurrence=train_config.use_recurrence,
+        gru_norm=train_config.gru_norm,
+        gru_disable_first_layer=train_config.gru_disable_first_layer,
+        gru_position=train_config.gru_position,
     )
     return RecurrentPythiaForCausalLM(model_config)
 
@@ -205,6 +216,7 @@ def run_sequence_loss(
             logits.reshape(-1, logits.size(-1)),
             chunk_labels.reshape(-1),
             reduction="sum",
+            ignore_index=-100,
         )
         total_loss = total_loss + loss
         total_tokens += chunk_labels.numel()
@@ -301,11 +313,13 @@ def write_run_metadata(train_config: TrainConfig, model_info: dict[str, Any]) ->
 def train_model(train_config: TrainConfig) -> None:
     set_seed(train_config.seed)
     device = torch.device(train_config.device)
+    prefix_length = train_config.window_size if train_config.prepend_prefix_chunk and train_config.window_size > 0 else 0
 
     train_dataset = build_dataset(
         data_path=train_config.data_path,
         seq_len=train_config.seq_len,
         split=train_config.split,
+        prefix_length=prefix_length,
     )
     train_loader = DataLoader(
         train_dataset,
@@ -321,6 +335,7 @@ def train_model(train_config: TrainConfig) -> None:
             data_path=train_config.data_path,
             seq_len=train_config.seq_len,
             split="val",
+            prefix_length=prefix_length,
         )
         val_loader = DataLoader(
             val_dataset,
@@ -504,6 +519,11 @@ def build_parser(train_defaults: Optional[dict[str, Any]] = None) -> argparse.Ar
     train.add_argument("--max-position-embeddings", type=int, default=4096)
     train.add_argument("--window-size", type=int, default=128)
     train.add_argument("--gru-hidden", type=int, default=256)
+    train.add_argument("--gru-norm", action="store_true")
+    train.add_argument("--no-gru-norm", action="store_true")
+    train.add_argument("--gru-disable-first-layer", action="store_true")
+    train.add_argument("--gru-position", choices=["pre_attn", "post_attn"], default="pre_attn")
+    train.add_argument("--prepend-prefix-chunk", action="store_true")
     train.add_argument("--truncate-bptt", action="store_true")
     train.add_argument("--no-truncate-bptt", action="store_true")
     train.add_argument("--num-workers", type=int, default=0)
@@ -584,6 +604,10 @@ def main(argv: Optional[list[str]] = None) -> None:
             merged["truncate_bptt"] = True
         if "--no-truncate-bptt" in argv:
             merged["truncate_bptt"] = False
+        if "--gru-norm" in argv:
+            merged["gru_norm"] = True
+        if "--no-gru-norm" in argv:
+            merged["gru_norm"] = False
 
         merged["config_path"] = config_path
         train_model(

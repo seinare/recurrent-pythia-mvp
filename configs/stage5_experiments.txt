@@ -1,0 +1,4 @@
+configs/rnn_w128_l1024_gru16_skipfirst_prefix.yaml
+configs/rnn_w128_l1024_gru32_skipfirst_prefix.yaml
+configs/rnn_w128_l1024_gru64_skipfirst_prefix.yaml
+configs/rnn_w128_l1024_gru128_skipfirst_prefix.yaml

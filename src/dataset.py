@@ -35,17 +35,23 @@ class CharDataset(Dataset[Dict[str, torch.Tensor]]):
         split: str = "train",
         stride: Optional[int] = None,
         split_offsets: Optional[dict[str, tuple[int, int]]] = None,
+        prefix_length: int = 0,
+        prefix_token_id: int = 0,
     ) -> None:
         self.data_path = Path(data_path)
         self.seq_len = seq_len
         self.split = split
         self.stride = stride or seq_len
         self.split_offsets = split_offsets
+        self.prefix_length = prefix_length
+        self.prefix_token_id = prefix_token_id
 
         if seq_len <= 0:
             raise ValueError("seq_len must be positive")
         if self.stride <= 0:
             raise ValueError("stride must be positive")
+        if prefix_length < 0:
+            raise ValueError("prefix_length must be non-negative")
         if not self.data_path.exists():
             raise FileNotFoundError(
                 f"Dataset file not found: {self.data_path}. "
@@ -118,6 +124,13 @@ class CharDataset(Dataset[Dict[str, torch.Tensor]]):
         end = start + self.seq_len
         input_ids = self._encoded[start:end]
         labels = self._encoded[start + 1 : end + 1]
+
+        if self.prefix_length > 0:
+            prefix_ids = torch.full((self.prefix_length,), self.prefix_token_id, dtype=torch.long)
+            prefix_labels = torch.full((self.prefix_length - 1,), -100, dtype=torch.long)
+            first_target = input_ids[:1]
+            input_ids = torch.cat([prefix_ids, input_ids], dim=0)
+            labels = torch.cat([prefix_labels, first_target, labels], dim=0)
         return {
             "input_ids": input_ids.clone(),
             "labels": labels.clone(),
@@ -148,5 +161,14 @@ def build_dataset(
     seq_len: int,
     split: str = "train",
     stride: Optional[int] = None,
+    prefix_length: int = 0,
+    prefix_token_id: int = 0,
 ) -> CharDataset:
-    return CharDataset(data_path=data_path, seq_len=seq_len, split=split, stride=stride)
+    return CharDataset(
+        data_path=data_path,
+        seq_len=seq_len,
+        split=split,
+        stride=stride,
+        prefix_length=prefix_length,
+        prefix_token_id=prefix_token_id,
+    )
